@@ -1,0 +1,13 @@
+# specific files
+environment.yml
+LICENSE.txt
+local_api.py
+
+# classes of files
+*.md
+
+# directories
+data/
+eda/
+screenshots/
+tests/
