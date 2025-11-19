@@ -19,7 +19,6 @@ import tempfile
 from urllib3.util.retry import Retry
 
 
-# TODO: implement module-wide logging interface so that I don't have to pass the logger to every function
 def new_logger(logger_name: str, rel_dir_path: str, max_log_size: int = 52736, backup_count=2, log_level=logging.DEBUG) -> logging.Logger:
     """Standardizes logs across the project for easier troubleshooting.
 
@@ -50,7 +49,6 @@ def new_logger(logger_name: str, rel_dir_path: str, max_log_size: int = 52736, b
     logging.captureWarnings(True)
     # basic logger object, uses the required parameter logger_name to differentiate in the logs
     logger = logging.getLogger(logger_name)
-    # extremely detailed logs for data science project
 
     # a list of dictionary objects in form "level" and "message". Will be used to log any pre-logging setup warnings for later use.
     pre_log_messages = []
@@ -94,6 +92,9 @@ def new_logger(logger_name: str, rel_dir_path: str, max_log_size: int = 52736, b
 
     return logger
 
+# Utilities Module-Wide Logging
+util_logger = new_logger(__name__, 'logs/utils')
+
 # TODO: fully implement the custom FetchError class
 class FetchError(Exception):
     # need to extend to be a custom, fully implemented Exception class
@@ -121,6 +122,7 @@ def _make_session(retries=3, backoff=0.5) -> requests.Session:
     """
 
     s = requests.Session()
+    util_logger.debug(f"Creating a new Session object to reach the FRED API: max retries={retries}, backoff_factor={backoff}")
     r = Retry(
         total=retries,
         backoff_factor=backoff,
@@ -129,6 +131,7 @@ def _make_session(retries=3, backoff=0.5) -> requests.Session:
         allowed_methods={'GET'}
     )
     s.mount("https://", HTTPAdapter(max_retries=r))
+    util_logger.debug("Mounted the custom https:// HTTPAdapter with the retry pool.")
     return s
 
 def _cache_paths(dest: Path, series_id: str, extension: str) -> tuple[Path, Path]:
@@ -149,7 +152,9 @@ def _cache_paths(dest: Path, series_id: str, extension: str) -> tuple[Path, Path
     """
 
     data_path = dest / f"{series_id}.orig.{extension}"
+    util_logger.debug(f"Setting up {data_path}")
     meta_path = dest / f"{series_id}.orig{CACHE_META_SUFFIX}"
+    util_logger.debug(f"Setting up {meta_path}")
 
     return data_path, meta_path
 
@@ -166,7 +171,9 @@ def _load_metadata(meta_path: Path) -> dict:
     """
 
     if not meta_path.exists():
+        util_logger.debug(f"Unable to find {meta_path.name}, metadata is empty.")
         return {}
+    util_logger.debug(f"Found file {meta_path.name}, returning contents as dict.")
     return json.loads(meta_path.read_text())
 
 def _save_atomic(df: pd.DataFrame, data_path: Path, meta: dict, fmt: str = "parquet") -> None:
@@ -192,6 +199,7 @@ def _save_atomic(df: pd.DataFrame, data_path: Path, meta: dict, fmt: str = "parq
 
     # create a temporary file that will replace the cached file
     tmp = data_path.with_suffix(data_path.suffix + ".tmp")
+    util_logger.debug(f"Created temporary file {tmp.name}")
     # save in various formats depending on the supplied format
     match fmt:
         case "parquet":
@@ -204,15 +212,18 @@ def _save_atomic(df: pd.DataFrame, data_path: Path, meta: dict, fmt: str = "parq
             # does not preserve type information, plain text file format for simple use cases
             df.to_csv(tmp, index=False)
     
+    util_logger.info(f"Saved content to {tmp.name} successfully, performing atomic swap.")
+    
     # swap tmp with data_path using replace()
     tmp.replace(data_path)
     # take in the metadata object and write to the new meta_path location
     # this should overwrite that path, presumably
     meta_path = data_path.with_suffix(CACHE_META_SUFFIX)
     meta_path.write_text(json.dumps(meta))
+    util_logger.info(f"{data_path.name} is now the new version. Saved metadata to {meta_path.name}")
 
 
-def fetch_with_cache(series_id: str, request_uri: str, logger: logging.Logger, dest="data/orig", max_age_days=30, fmt="parquet"):
+def fetch_with_cache(series_id: str, request_uri: str, dest="data/orig", max_age_days=30, fmt="parquet"):
     """Loads a FRED data series from an API call or locally if data is not stale.
 
     This function is meant to reduce network bandwidth and calls to the FRED API by using local caching to the dest_path directory. It also uses a metadata sidecar file in order to track when the last actual update was from the API side. If the data wasn't actually updated from the API side, the cached data will be loaded instead.
@@ -239,9 +250,12 @@ def fetch_with_cache(series_id: str, request_uri: str, logger: logging.Logger, d
     Raises:
         HTTPError: Raised if there was an HTTPError from the requests response.
     """
+    util_logger.info(f"Starting to fetch {series_id} from the FRED API...")
     # Step 0. create your dest_path and meta_path, load meta to variable
     dest = Path(dest)
+    util_logger.debug(f"Checking for creation of {str(dest)}...")
     dest.mkdir(parents=True, exist_ok=True)  # create this directory if not exists, create parents as needed, OK if already exists.
+    util_logger.debug(f"{str(dest)} has been verified: {dest.exists()}")
 
     data_path, meta_path = _cache_paths(dest, series_id, fmt)
 
@@ -252,7 +266,7 @@ def fetch_with_cache(series_id: str, request_uri: str, logger: logging.Logger, d
     if data_path.exists():
         age = (time.time() - data_path.stat().st_mtime) / 86400 # get age in days
         if age <= max_age_days:
-            logger.debug(f"{data_path.name} age ({age}) is below threshold ({max_age_days}). Using cached version.")
+            util_logger.debug(f"{data_path.name} age ({age}) is below threshold ({max_age_days}). Using cached version.")
 
             match fmt:
                 case "parquet":
@@ -263,8 +277,8 @@ def fetch_with_cache(series_id: str, request_uri: str, logger: logging.Logger, d
                     try:
                         return pd.read_csv(data_path)
                     except Exception as err:
-                        logger.error("Unable to read in CSV file.")
-                        logger.error(err)
+                        util_logger.error("Unable to read in CSV file.")
+                        util_logger.error(err)
 
     # Step 2. Call API with conditional headers and using a session
     session = _make_session()
@@ -281,7 +295,7 @@ def fetch_with_cache(series_id: str, request_uri: str, logger: logging.Logger, d
 
     # if there has been no update since the cached file was last modified
     if resp.status_code == 304 and data_path.exists():
-        logger.debug(f"Received 304 Not Modified; returning cached file {data_path.name}")
+        util_logger.debug(f"Received 304 Not Modified; returning cached file {data_path.name}")
         match fmt:
             case "parquet":
                 return pd.read_parquet(data_path)
@@ -291,8 +305,8 @@ def fetch_with_cache(series_id: str, request_uri: str, logger: logging.Logger, d
                 try:
                     return pd.read_csv(data_path)
                 except Exception as err:
-                    logger.error("Unable to read in CSV file.")
-                    logger.error(err)
+                    util_logger.error("Unable to read in CSV file.")
+                    util_logger.error(err)
 
     resp.raise_for_status()  # raises HTTP error if occurred
 
@@ -304,7 +318,7 @@ def fetch_with_cache(series_id: str, request_uri: str, logger: logging.Logger, d
     if observations is None:
         raise FetchError("Missing 'observations' in FRED API response")
     
-    logger.info(f"Received {payload['count']} records from call. Transferring to DataFrame.")
+    util_logger.info(f"Received {payload['count']} records from {series_id} call. Creating DataFrame...")
     
     series_df = pd.DataFrame(
         {
@@ -313,10 +327,11 @@ def fetch_with_cache(series_id: str, request_uri: str, logger: logging.Logger, d
         }
     )
 
+    util_logger.debug(f"Performing type conversions: date --> np.datetime64[ns], {series_id} --> numeric (as appropriate).")
     series_df["date"] = pd.to_datetime(series_df["date"])
     series_df[series_id] = pd.to_numeric(series_df[series_id], errors="coerce")
 
-    logger.debug(f"The DataFrame for {series_id} was created with {series_df.shape[0]} rows and {series_df.shape[1]} columns.")
+    util_logger.info(f"The DataFrame for {series_id} was created with {series_df.shape[0]} rows and {series_df.shape[1]} columns.")
 
     # write atomically, save metadata
     meta = {
@@ -324,6 +339,7 @@ def fetch_with_cache(series_id: str, request_uri: str, logger: logging.Logger, d
         "etag": resp.headers.get("ETag"),
         "last_modified": resp.headers.get("Last-Modified")
     }
+    util_logger.debug(f"Saving metadata: {str(meta)}")
 
     _save_atomic(series_df, data_path, meta, fmt)
 
