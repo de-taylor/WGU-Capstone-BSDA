@@ -176,7 +176,7 @@ def _load_metadata(meta_path: Path) -> dict:
     util_logger.debug(f"Found file {meta_path.name}, returning contents as dict.")
     return json.loads(meta_path.read_text())
 
-def _save_atomic(df: pd.DataFrame, data_path: Path, meta: dict, fmt: str = "parquet") -> None:
+def save_atomic(df: pd.DataFrame, data_path: Path, meta: dict, fmt: str = "parquet") -> None:
     """Implements an atomic save design pattern that will prevent users from seeing partially written cache files.
 
     Performs this using the OS-specific .replace() function on a temporary file that will fully overwrite the old file, without leaving it partially completed for users who open the file in the middle of the write operation.
@@ -218,9 +218,11 @@ def _save_atomic(df: pd.DataFrame, data_path: Path, meta: dict, fmt: str = "parq
     tmp.replace(data_path)
     # take in the metadata object and write to the new meta_path location
     # this should overwrite that path, presumably
-    meta_path = data_path.with_suffix(CACHE_META_SUFFIX)
-    meta_path.write_text(json.dumps(meta))
-    util_logger.info(f"{data_path.name} is now the new version. Saved metadata to {meta_path.name}")
+    if len(meta) > 0:
+        meta_path = data_path.with_suffix(CACHE_META_SUFFIX)
+        meta_path.write_text(json.dumps(meta))
+        util_logger.info(f"Saved metadata to {meta_path.name}")
+    util_logger.info(f"{data_path.name} is now the new version.")
 
 
 def fetch_with_cache(series_id: str, request_uri: str, dest="data/orig", max_age_days=30, fmt="parquet"):
@@ -341,6 +343,6 @@ def fetch_with_cache(series_id: str, request_uri: str, dest="data/orig", max_age
     }
     util_logger.debug(f"Saving metadata: {str(meta)}")
 
-    _save_atomic(series_df, data_path, meta, fmt)
+    save_atomic(series_df, data_path, meta, fmt)
 
     return series_df
