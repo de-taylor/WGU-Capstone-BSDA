@@ -9,5 +9,8 @@ local_api.py
 # directories
 data/
 eda/
-screenshots/
 tests/
+_tasks/
+mlruns/
+wandb/
+docs/

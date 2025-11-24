@@ -1,8 +1,12 @@
 # Created by https://www.toptal.com/developers/gitignore/api/python
 # Edit at https://www.toptal.com/developers/gitignore?templates=python
 
-### Capstone Specific Information ###
-_forms/
+### Temp conf files ###
+fred_api.conf
+
+### MLFlow and W&B ###
+mlruns/
+wandb/
 
 ### VSCode ###
 .vscode/

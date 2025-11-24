@@ -1,0 +1,64 @@
+name: wgu_capstone
+conda_env: conda.yml
+
+entry_points:
+  main:
+    parameters:
+      steps:
+        description: Comma-separated list of steps to execute.
+        type: str
+        default: ''
+
+      hydra_options:
+        description: Other configuration parameters for overriding config.yaml
+        type: str
+        default: ''
+
+    command: "python main.py main.steps='{steps}' {hydra_options}"
+
+  get_data:
+    parameters:
+      series_config_path:
+        description: The string Path of the FRED series names, by series frequency
+        type: string
+      
+      api_base_url:
+        description: The base FRED API URL to use to gather the economic series data
+        type: string
+
+      fred_api_key:
+        description: The secret FRED API key to use to gather data, when the cache has expired
+        type: string
+
+      output_path:
+        description: The local directory where the original DataFrame should be kept
+        type: string
+
+      artifact_name:
+        description: Name for the output artifact
+        type: string
+
+      artifact_type:
+        description: Type of the output artifact. This will be used to categorize the artifact in the W&B interface
+        type: string
+
+    command: "python -m src.get_data.run --series_config_path {series_config_path} --api_base_url {api_base_url} --fred_api_key {fred_api_key} --output_path {output_path} --artifact_name {artifact_name} --artifact_type {artifact_type}"
+    
+  clean_data:
+    parameters:
+      input_artifact:
+        description: The specific artifact to use for cleaning
+        type: string
+
+      output_path:
+        description: The local directory where the clean DataFrame should be kept.
+
+      artifact_name:
+        description: Name for the output artifact
+        type: string
+
+      artifact_type:
+        description: Type of the output artifact. This will be used to categorize the artifact in the W&B interface
+        type: string
+
+    command: "python -m src.clean_data.run --input_artifact {input_artifact} --output_path {output_path} --artifact_name {artifact_name} --artifact_type {artifact_type}"
