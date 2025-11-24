@@ -4,6 +4,10 @@
 ### Temp conf files ###
 fred_api.conf
 
+### MLFlow and W&B ###
+mlruns/
+wandb/
+
 ### VSCode ###
 .vscode/
 

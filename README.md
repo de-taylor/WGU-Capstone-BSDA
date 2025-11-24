@@ -13,4 +13,4 @@ code coverage badge, tests passing badge, versioning badge
 
 ## Data Acquisition
 
-Per the Terms of Use for the Federal Reserve of St. Louis' FERD API, the following must be prominently displayed on this document: "This project uses the FRED® API but is not endorsed or certified by the Federal Reserve Bank of St. Louis."
+Per the Terms of Use for the Federal Reserve of St. Louis' FRED API, the following must be prominently displayed on this document: "This project uses the FRED® API but is not endorsed or certified by the Federal Reserve Bank of St. Louis."

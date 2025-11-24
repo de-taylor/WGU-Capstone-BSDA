@@ -1,0 +1,2 @@
+- main.steps='get_data,clean_data'
+- etl.fred_api_key=ffc4b7cd8be1d86024d133573e3031ca

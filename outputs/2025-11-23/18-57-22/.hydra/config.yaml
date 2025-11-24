@@ -1,0 +1,14 @@
+main:
+  project_name: wgu_capstone
+  experiment_name: development
+  steps: clean_data
+etl:
+  api_base_url: https://api.stlouisfed.org/fred/series/observations
+  fred_api_key: ffc4b7cd8be1d86024d133573e3031ca
+  series_config_path: src/get_data/fred_series.json
+  output_path: data/wip
+  artifact_name: econ_feats.wip.parquet
+cleaning:
+  input_artifact: wgu_capstone/econ_feats.wip.parquet:latest
+  output_path: data/clean
+  artifact_name: econ_feats.clean.parquet

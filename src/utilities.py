@@ -2,7 +2,7 @@
 
 This project contains common functions that are vital to the overall success of the Capstone project. Rather than duplicating code, this sub-module was created in order to smooth over the development process, and provide standardization for common tasks.
 
-The functions in this module include creating a uniform logger, robustly loading data from the FRED API...
+The functions in this module include creating a uniform logger, robustly loading data from the FRED API, and committing data files to Weights&Biases as needed.
 """
 # Imports
 import json
@@ -15,7 +15,6 @@ import requests
 from requests.adapters import HTTPAdapter
 import sys
 import time
-import tempfile
 from urllib3.util.retry import Retry
 
 
@@ -176,7 +175,7 @@ def _load_metadata(meta_path: Path) -> dict:
     util_logger.debug(f"Found file {meta_path.name}, returning contents as dict.")
     return json.loads(meta_path.read_text())
 
-def save_atomic(df: pd.DataFrame, data_path: Path, meta: dict, fmt: str = "parquet") -> None:
+def save_atomic(df: pd.DataFrame, data_path: Path, meta: dict, fmt: str = "parquet") -> Path:
     """Implements an atomic save design pattern that will prevent users from seeing partially written cache files.
 
     Performs this using the OS-specific .replace() function on a temporary file that will fully overwrite the old file, without leaving it partially completed for users who open the file in the middle of the write operation.
@@ -194,7 +193,7 @@ def save_atomic(df: pd.DataFrame, data_path: Path, meta: dict, fmt: str = "parqu
             The format to use to write the cache file to disk. Defaults to 'parquet'
 
     Returns:
-        None
+        Path, the data path for logging in artifact trackers.
     """
 
     # create a temporary file that will replace the cached file
@@ -204,13 +203,13 @@ def save_atomic(df: pd.DataFrame, data_path: Path, meta: dict, fmt: str = "parqu
     match fmt:
         case "parquet":
             # preserves type information, not the index
-            df.to_parquet(tmp, index=False)
+            df.to_parquet(tmp)
         case "feather":
             # does not preserve type information, smaller file format for most simple use cases
             df.to_feather(tmp)
         case _:
             # does not preserve type information, plain text file format for simple use cases
-            df.to_csv(tmp, index=False)
+            df.to_csv(tmp)
     
     util_logger.info(f"Saved content to {tmp.name} successfully, performing atomic swap.")
     
@@ -224,8 +223,10 @@ def save_atomic(df: pd.DataFrame, data_path: Path, meta: dict, fmt: str = "parqu
         util_logger.info(f"Saved metadata to {meta_path.name}")
     util_logger.info(f"{data_path.name} is now the new version.")
 
+    return data_path
 
-def fetch_with_cache(series_id: str, request_uri: str, dest="data/orig", max_age_days=30, fmt="parquet"):
+
+def fetch_with_cache(series_id: str, request_uri: str, dest="data/orig", max_age_days=30, fmt="parquet", to_wandb: bool = False):
     """Loads a FRED data series from an API call or locally if data is not stale.
 
     This function is meant to reduce network bandwidth and calls to the FRED API by using local caching to the dest_path directory. It also uses a metadata sidecar file in order to track when the last actual update was from the API side. If the data wasn't actually updated from the API side, the cached data will be loaded instead.
@@ -243,7 +244,7 @@ def fetch_with_cache(series_id: str, request_uri: str, dest="data/orig", max_age
             The destination path for the raw (unaltered) DataFrame, either as a Feather or CSV file (or both). Defaults to 'data/orig'
         max_days_old (int):
             The maximum number of days the local file can be cached before needing to be renewed. Renewal occurs from a call to the FRED API. Data is at most daily, but this parameter can be 0 to force an API call as needed. Defaults to 30.
-        fmt: (str):
+        fmt (str):
             The file type used in the local data cache. Defaults to 'parquet', for the Parquet columnar file type. Options are 'parquet', 'feather', or 'csv'.
     
     Returns:
